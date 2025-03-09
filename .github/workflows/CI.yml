@@ -1,0 +1,60 @@
+name: Build Memory Card Converter
+
+on:
+  push:
+    branches: [ '*' ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      
+    - name: Configure CMake
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release
+    
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config Release
+    
+    - name: Archive binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: convmcecc-windows-x64
+        path: ${{github.workspace}}/build/Release/convmcecc.exe
+    
+  create-release:
+    needs: build-windows
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: convmcecc-windows-x64
+        path: ./artifacts
+    
+    - name: Get tag version
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+    
+    - name: Create ZIP archive
+      run: |
+        cd ./artifacts
+        zip -r convmcecc-windows-x64-${{ steps.get_version.outputs.VERSION }}.zip convmcecc.exe
+    
+    - name: Create GitHub Release
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: Memory Card Converter ${{ steps.get_version.outputs.VERSION }}
+        files: ./artifacts/convmcecc-windows-x64-${{ steps.get_version.outputs.VERSION }}.zip
+        draft: false
+        prerelease: false
+        generate_release_notes: true
